@@ -249,21 +249,29 @@ xticklabels(tubular_streams_labels);
 xtickangle(30);
 
 % --- PLOT 3: Concentration Along the Nephron ---
+
+
 % Calculate volume in Liters: (moles H2O * 18 g/mol) / (1000 g/L)
 volume_L = data(:,7) * 18 / 1000;
-% Calculate concentration in mmol/L: (moles solute / L) * 1000 mmol/mol
-conc_Na_tubule = (data(:,2) ./ volume_L); % This is in mol/L
-conc_Urea_tubule = (data(:,5) ./ volume_L); % This is in mol/L
+% Calculate concentration in mol/L: (moles solute / L)
+conc_Na_tubule    = (data(:,2) ./ volume_L);
+conc_K_tubule     = (data(:,3) ./ volume_L);
+conc_HCO3_tubule  = (data(:,4) ./ volume_L);
+conc_Urea_tubule  = (data(:,5) ./ volume_L);
+conc_Cl_tubule    = (data(:,6) ./ volume_L);
 
-figure('Name', 'Concentration of Solutes');
-plot(tubular_streams_idx, conc_Na_tubule, 'r-s', 'LineWidth', 2, 'DisplayName', 'Na+ Concentration');
+figure('Name', 'Concentration of All Solutes');
+plot(tubular_streams_idx, conc_Na_tubule, '-s', 'LineWidth', 2, 'DisplayName', 'Na+');
 hold on;
-plot(tubular_streams_idx, conc_Urea_tubule, 'm-p', 'LineWidth', 2, 'DisplayName', 'Urea Concentration');
+plot(tubular_streams_idx, conc_Cl_tubule, '-^', 'LineWidth', 2, 'DisplayName', 'Cl-');
+plot(tubular_streams_idx, conc_Urea_tubule, '-p', 'LineWidth', 2, 'DisplayName', 'Urea');
+plot(tubular_streams_idx, conc_K_tubule, '-d', 'LineWidth', 2, 'DisplayName', 'K+');
+plot(tubular_streams_idx, conc_HCO3_tubule, '-h', 'LineWidth', 2, 'DisplayName', 'HCO3-');
 hold off;
 title('Concentration of Solutes Along the Nephron');
 xlabel('Stream Number');
 ylabel('Concentration (mol/L)');
-legend('show');
+legend('show', 'Location', 'northwest');
 grid on;
 xticks(tubular_streams_idx);
 xticklabels(tubular_streams_labels);
