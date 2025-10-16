@@ -1,137 +1,134 @@
-function [streams] = nephronModel3(scenarioName, conc_Na, conc_K, conc_HCO3, conc_Urea, conc_Cl)
-%   inputs:
-%   scenarioName - A string to label the plots
-%   conc_Na, -initial plasma concentrations in mmol/L.
-%
-%   out:
-%   streams - A matrix containing the molar flow rates for all
-%             species in every stream of the model.
+function [streams] = nephronModel3(scenarioName, conc_Na, conc_K, conc_HCO3, conc_Urea, conc_Cl, conc_Glucose)
+% Simulates the 6 main tubule segments as
+%   distinct units, including separated cortical and medullary ducts.
 
-%  1. Model start
-fprintf('\n\n====================================================================\n');
-fprintf('===== Running Simulation for: %s =====\n', upper(scenarioName));
-fprintf('====================================================================\n');
+%  1. set up
 
-% Initialization and Knowns
+%% Initialize Plasma and GFR
 GFR_L_per_min = 0.125;
 GFR = GFR_L_per_min * 60; % L/hr
 
-n_Na_3    = conc_Na * GFR / 1000;
-n_K_3     = conc_K * GFR / 1000;
-n_HCO3_3  = conc_HCO3 * GFR / 1000;
-n_Urea_3  = conc_Urea * GFR / 1000;
-n_Cl_3    = conc_Cl * GFR / 1000;
-n_H2O_3   = (1000 * GFR) / 18;
+% Initialize a 7x8 matrix for the 7 key streams and 8 species (total + 7)
+streams = zeros(7, 8);
 
-n_total_3 = n_Na_3 + n_K_3 + n_HCO3_3 + n_Urea_3 + n_Cl_3 + n_H2O_3;
+%  Calculate Stream 1: Fluid Entering the PCT 
+streams(1, 2) = conc_Na * GFR / 1000;      % n_Na+
+streams(1, 3) = conc_K * GFR / 1000;       % n_K+
+streams(1, 4) = conc_HCO3 * GFR / 1000;    % n_HCO3-
+streams(1, 5) = conc_Urea * GFR / 1000;    % n_Urea
+streams(1, 6) = conc_Cl * GFR / 1000;       % n_Cl-
+streams(1, 7) = 0; % Glucose not finished
+streams(1, 8) = (1000 * GFR) / 18;         % n_H2O
+streams(1, 1) = sum(streams(1, 2:8));      % n_total
 
-streams = zeros(14, 7);
-streams(3,:) = [n_total_3, n_Na_3, n_K_3, n_HCO3_3, n_Urea_3, n_Cl_3, n_H2O_3];
+% Units
 
+%  1. PCT [Input: Stream 1 -> Output: Stream 2] 
+reab_pct = [0.65; 0.65; 0.85; 0.50; 0.60; 0.00; 0.66];
+remaining_pct = 1 - reab_pct;
+streams(2, 2:8) = streams(1, 2:8) .* remaining_pct';
+streams(2, 1) = sum(streams(2, 2:8));
 
-% Moles Conservation Equations
-%  Bowman's capsule 
-streams(4,:) = streams(3,:);
+%  2. Descending Limb [Input: Stream 2 -> Output: Stream 3] 
+reab_desc = [0; 0; 0; 0.15; 0; 0; 0.15];
+remaining_desc = 1 - reab_desc;
+streams(3, 2:8) = streams(2, 2:8) .* remaining_desc';
+streams(3, 1) = sum(streams(3, 2:8));
 
-%  PCT 
-reab_pct = [0.65; 0.65; 0.85; 0.50; 0.60; 0.66];
-n_species_5 = streams(4, 2:7)' .* reab_pct;
-streams(5, :) = [sum(n_species_5), n_species_5'];
-streams(6, :) = streams(4, :) - streams(5, :);
+%  3. Ascending Limb [Input: Stream 3 -> Output: Stream 4] 
+reab_asc = [0.25; 0.20; 0; 0; 0.45; 0; 0];
+remaining_asc = 1 - reab_asc;
+streams(4, 2:8) = streams(3, 2:8) .* remaining_asc';
+streams(4, 1) = sum(streams(4, 2:8));
 
-%  Descending LOH 
-n_species_7 = zeros(1,6);
-n_species_7(6) = streams(6, 7) * 0.15;
-streams(7,:) = [sum(n_species_7), n_species_7];
-streams(8,:) = streams(6,:) - streams(7,:);
+%  4. DCT [Input: Stream 4 -> Output: Stream 5] 
+reab_dct = [0.075; 0; 0.085; 0; 0.075; 0; 0.075];
+remaining_dct = 1 - reab_dct;
+streams(5, 2:8) = streams(4, 2:8) .* remaining_dct';
+streams(5, 1) = sum(streams(5, 2:8));
 
-%  Thin Ascending LOH 
-n_species_9 = zeros(1,6);
-n_species_9(1) = streams(8, 2) * 0.05;
-n_species_9(5) = streams(8, 6) * 0.05;
-streams(9,:) = [sum(n_species_9), n_species_9];
-streams(10,:) = streams(8,:) - streams(9,:);
+%  5. Cortical Collecting Duct [Input: Stream 5 -> Output: Stream 6] 
+reab_cort_cd = [0.035; 0; 0.045; 0.025; 0.035; 0; 0.075];
+remaining_cort_cd = 1 - reab_cort_cd;
+streams(6, 2:8) = streams(5, 2:8) .* remaining_cort_cd';
+streams(6, 1) = sum(streams(6, 2:8));
 
-%  Thick Ascending LOH 
-reab_tal = [0.25; 0.20; 0; 0; 0.50; 0];
-n_reabsorbed_species_tal = streams(10, 2:7)' .* reab_tal;
-streams(11, 2:7) = streams(10, 2:7) - n_reabsorbed_species_tal';
-streams(11, 1) = sum(streams(11, 2:7));
-
-%  DCT 
-reab_dct = [0.05; 0; 0; 0; 0.05; 0.05];
-n_species_12 = streams(11, 2:7)' .* reab_dct;
-streams(12, :) = [sum(n_species_12), n_species_12'];
-streams(13, :) = streams(11, :) - streams(12, :);
-
-%  Collecting Duct 
-reab_cd = [0.03; 0; 0; 0.10; 0.02; 0.08];
-n_reabsorbed_species_cd = streams(13, 2:7)' .* reab_cd;
-streams(14, :) = streams(13, :) - [sum(n_reabsorbed_species_cd), n_reabsorbed_species_cd'];
+%  6. Medullary Collecting Duct [Input: Stream 6 -> Output: Stream 7] 
+reab_med_cd = [0.03; 0; 0; 0.225; 0.015; 0; 0.04];
+remaining_med_cd = 1 - reab_med_cd;
+streams(7, 2:8) = streams(6, 2:8) .* remaining_med_cd';
+streams(7, 1) = sum(streams(7, 2:8));
 
 
- 
-%  2. results
-  
+%  3. results
+stream_labels = {'1 (PCT In)', '2 (Desc In)', '3 (Asc In)', '4 (DCT In)', '5 (Cort. CD In)', '6 (Med. CD In)', '7 (Final Urine)'};
+species_labels_n = {'n_Na+', 'n_K+', 'n_HCO3-', 'n_Urea', 'n_Cl-', 'n_Glucose', 'n_H2O'};
+species_labels_c = {'C_Na+', 'C_K+', 'C_HCO3-', 'C_Urea', 'C_Cl-', 'C_Glucose'};
 
-fprintf(Molar Flow Rates (mol/hr)\n');
-fprintf('Stream\t n_total\t n_Na+\t\t n_K+\t\t n_HCO3-\t n_Urea\t\t n_Cl-\t\t n_H2O\n');
-for i = 3:14
-    if streams(i,1) ~= 0
-     fprintf('%d\t\t %5.4f\t\t %5.4f\t\t %5.4f\t\t %5.4f\t\t %5.4f\t\t %5.4f\t\t %5.2f\n', ...
-            i, streams(i,1), streams(i,2), streams(i,3), streams(i,4), streams(i,5), streams(i,6), streams(i,7));
-    end
+%  Table 1 & 2: Molar Flow Rates and Concentrations 
+volume_L = streams(:,8) * 18 / 1000;
+concentrations = streams(:, 2:7) ./ volume_L;
+fprintf('\n\n TABLE 1: Molar Flow Rates (mol/hr) \n');
+fprintf('%-16s', 'Stream');
+for j = 1:length(species_labels_n), fprintf('\t%s', species_labels_n{j}); end, fprintf('\n');
+for i = 1:7
+    fprintf('%-16s', stream_labels{i});
+    fprintf('\t%5.4f\t%5.4f\t%5.4f\t%5.4f\t%5.4f\t%5.4f\t\t%5.2f\n', streams(i, 2:8));
+end
+fprintf('\n\n TABLE 2: Solute Concentrations (mol/L) \n');
+fprintf('%-16s', 'Stream');
+for j = 1:length(species_labels_c), fprintf('\t%s', species_labels_c{j}); end, fprintf('\n');
+for i = 1:7
+    fprintf('%-16s', stream_labels{i});
+    fprintf('\t%5.4f\t%5.4f\t%5.4f\t%5.4f\t%5.4f\t%5.4f\n', concentrations(i, :));
 end
 
 
-%  plotting 
+%  4. plotting
+stream_indices_for_plotting = 1:7;
 
-tubular_streams_idx = [4, 6, 8, 10, 11, 13, 14];
-tubular_streams_labels = {'Bowman''s', 'End PCT', 'End Desc. LOH', 'End Thin Asc.', 'End Thick Asc.', 'End DCT', 'Urine'};
-data = streams(tubular_streams_idx, :);
-
-%  plot 1: Molar Flow Rates 
-figure('Name', [scenarioName, ': Molar Flow Rates']);
-plot(tubular_streams_idx, data(:,7), 'b-o', 'LineWidth', 2, 'DisplayName', 'Water (H2O)');
-hold on;
-plot(tubular_streams_idx, data(:,2), 'r-s', 'LineWidth', 2, 'DisplayName', 'Sodium (Na+)');
-plot(tubular_streams_idx, data(:,6), 'g-^', 'LineWidth', 2, 'DisplayName', 'Chloride (Cl-)');
+%  PLOT 1: Solute Flow Rates (Log Scale) 
+figure('Name', [scenarioName, ': Solute Flow Rates (Log)']);
+semilogy(stream_indices_for_plotting, streams(:,2), '-s', 'LineWidth', 2, 'DisplayName', 'Na+'); hold on;
+semilogy(stream_indices_for_plotting, streams(:,6), '-^', 'LineWidth', 2, 'DisplayName', 'Cl-');
+semilogy(stream_indices_for_plotting, streams(:,5), '-p', 'LineWidth', 2, 'DisplayName', 'Urea');
+semilogy(stream_indices_for_plotting, streams(:,3), '-d', 'LineWidth', 2, 'DisplayName', 'K+');
+semilogy(stream_indices_for_plotting, streams(:,4), '-h', 'LineWidth', 2, 'DisplayName', 'HCO3-');
+semilogy(stream_indices_for_plotting, streams(:,7), '-x', 'LineWidth', 2, 'DisplayName', 'Glucose (zero)');
 hold off;
-title([scenarioName, ': Molar Flow Rates Along the Nephron']);
-xlabel('Nephron Segment'); ylabel('Molar Flow Rate (mol/hr)');
-legend('show'); grid on; xticks(tubular_streams_idx); xticklabels(tubular_streams_labels); xtickangle(30);
+title([scenarioName, ': Solute Flow Rates (Log Scale)']);
+xlabel('Stream Number (Input to Segment)'); ylabel('Molar Flow Rate (mol/hr)');
+legend('show', 'Location', 'southwest'); grid on; xticks(stream_indices_for_plotting); xticklabels(stream_labels); xtickangle(45);
 
-%  plot 2: Concentration of All Solutes 
-volume_L = data(:,7) * 18 / 1000;
-conc_Na_tubule    = (data(:,2) ./ volume_L);
-conc_K_tubule     = (data(:,3) ./ volume_L);
-conc_HCO3_tubule  = (data(:,4) ./ volume_L);
-conc_Urea_tubule  = (data(:,5) ./ volume_L);
-conc_Cl_tubule    = (data(:,6) ./ volume_L);
-
+%  PLOT 2: Concentration of All Solutes 
 figure('Name', [scenarioName, ': Solute Concentrations']);
-plot(tubular_streams_idx, conc_Na_tubule, '-s', 'LineWidth', 2, 'DisplayName', 'Na+');
-hold on;
-plot(tubular_streams_idx, conc_Cl_tubule, '-^', 'LineWidth', 2, 'DisplayName', 'Cl-');
-plot(tubular_streams_idx, conc_Urea_tubule, '-p', 'LineWidth', 2, 'DisplayName', 'Urea');
-plot(tubular_streams_idx, conc_K_tubule, '-d', 'LineWidth', 2, 'DisplayName', 'K+');
-plot(tubular_streams_idx, conc_HCO3_tubule, '-h', 'LineWidth', 2, 'DisplayName', 'HCO3-');
+plot(stream_indices_for_plotting, concentrations(:,1), '-s', 'LineWidth', 2, 'DisplayName', 'Na+'); hold on;
+plot(stream_indices_for_plotting, concentrations(:,5), '-^', 'LineWidth', 2, 'DisplayName', 'Cl-');
+plot(stream_indices_for_plotting, concentrations(:,4), '-p', 'LineWidth', 2, 'DisplayName', 'Urea');
+plot(stream_indices_for_plotting, concentrations(:,2), '-d', 'LineWidth', 2, 'DisplayName', 'K+');
+plot(stream_indices_for_plotting, concentrations(:,3), '-h', 'LineWidth', 2, 'DisplayName', 'HCO3-');
+plot(stream_indices_for_plotting, concentrations(:,6), '-x', 'LineWidth', 2, 'DisplayName', 'Glucose (zero)');
 hold off;
 title([scenarioName, ': Solute Concentrations Along the Nephron']);
-xlabel('Nephron Segment'); ylabel('Concentration (mol/L)');
-legend('show', 'Location', 'northwest'); grid on; xticks(tubular_streams_idx); xticklabels(tubular_streams_labels); xtickangle(30);
-
-%  plot 3: Fluid Composition 
-comp_idx = [4, 6, 11, 14];
-comp_labels = {'Filtrate', 'After PCT', 'After LOH', 'Final Urine'};
-comp_data = streams(comp_idx, 2:7);
-mole_fractions = comp_data ./ sum(comp_data, 2);
-
-figure('Name', [scenarioName, ': Fluid Composition']);
-bar(mole_fractions, 'stacked');
-title([scenarioName, ': Relative Molar Composition of Fluid']);
-ylabel('Mole Fraction (xi)'); xlabel('Location in Nephron');
-xticks(1:length(comp_labels)); xticklabels(comp_labels);
-legend('Na+', 'K+', 'HCO3-', 'Urea', 'Cl-', 'H2O', 'Location', 'eastoutside'); grid on;
+xlabel('Stream Number (Input to Segment)'); ylabel('Concentration (mol/L)');
+legend('show', 'Location', 'best'); grid on; xticks(stream_indices_for_plotting); xticklabels(stream_labels); xtickangle(45);
 
 end
+
+
+
+clc;
+clear;
+close all;
+
+% Normal starting concentrations.
+healthy_Na    = 140;
+healthy_K     = 4.25;
+healthy_HCO3  = 24;
+healthy_Urea  = 4.75;
+healthy_Cl    = 101;
+[healthy_streams] = nephronModel3('Healthy State', healthy_Na, healthy_K, healthy_HCO3, healthy_Urea, healthy_Cl);
+pause; 
+
+
+
